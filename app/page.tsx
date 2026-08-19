@@ -1,13 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 /* =========================================================
    TYPES
 ========================================================= */
 
 type MarketType = "crypto" | "forex";
-type Timeframe = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
+
+type Timeframe =
+  | "1m"
+  | "5m"
+  | "15m"
+  | "30m"
+  | "1h"
+  | "4h"
+  | "1d";
+
 type Signal = "BUY" | "SELL" | null;
 
 type SignalData = {
@@ -37,6 +52,10 @@ type MarketValue = {
   close?: string | number;
 };
 
+/* =========================================================
+   MARKETS
+========================================================= */
+
 const cryptoMarkets = [
   "BTC/USDT",
   "ETH/USDT",
@@ -49,7 +68,7 @@ const cryptoMarkets = [
   "AVAX/USDT",
   "LINK/USDT",
   "DOT/USDT",
-  "POL/USDT",
+  "MATIC/USDT",
   "LTC/USDT",
   "BCH/USDT",
   "UNI/USDT",
@@ -93,19 +112,55 @@ const forexMarkets = [
   "USD/SGD",
 ];
 
+/* =========================================================
+   TIMEFRAMES
+========================================================= */
+
 const timeframes: {
   label: string;
   value: Timeframe;
   seconds: number;
 }[] = [
-  { label: "1 Minute", value: "1m", seconds: 60 },
-  { label: "5 Minutes", value: "5m", seconds: 300 },
-  { label: "15 Minutes", value: "15m", seconds: 900 },
-  { label: "30 Minutes", value: "30m", seconds: 1800 },
-  { label: "1 Hour", value: "1h", seconds: 3600 },
-  { label: "4 Hours", value: "4h", seconds: 14400 },
-  { label: "1 Day", value: "1d", seconds: 86400 },
+  {
+    label: "1 Minute",
+    value: "1m",
+    seconds: 60,
+  },
+  {
+    label: "5 Minutes",
+    value: "5m",
+    seconds: 300,
+  },
+  {
+    label: "15 Minutes",
+    value: "15m",
+    seconds: 900,
+  },
+  {
+    label: "30 Minutes",
+    value: "30m",
+    seconds: 1800,
+  },
+  {
+    label: "1 Hour",
+    value: "1h",
+    seconds: 3600,
+  },
+  {
+    label: "4 Hours",
+    value: "4h",
+    seconds: 14400,
+  },
+  {
+    label: "1 Day",
+    value: "1d",
+    seconds: 86400,
+  },
 ];
+
+/* =========================================================
+   TRADINGVIEW INTERVALS
+========================================================= */
 
 const tvIntervals: Record<Timeframe, string> = {
   "1m": "1",
@@ -117,6 +172,10 @@ const tvIntervals: Record<Timeframe, string> = {
   "1d": "D",
 };
 
+/* =========================================================
+   BINANCE INTERVALS
+========================================================= */
+
 const binanceIntervals: Record<Timeframe, string> = {
   "1m": "1m",
   "5m": "5m",
@@ -127,6 +186,10 @@ const binanceIntervals: Record<Timeframe, string> = {
   "1d": "1d",
 };
 
+/* =========================================================
+   EMPTY BACKTEST
+========================================================= */
+
 const emptyBacktest: BacktestData = {
   winRate: 0,
   profitFactor: 0,
@@ -135,17 +198,59 @@ const emptyBacktest: BacktestData = {
 };
 
 /* =========================================================
+   TRADINGVIEW SYMBOL HELPER
+========================================================= */
+
+/*
+ * IMPORTANT:
+ *
+ * Crypto:
+ * BTC/USDT -> BINANCE:BTCUSDT
+ *
+ * Forex:
+ * EUR/USD -> FX:EURUSD
+ *
+ * This prevents the old problem:
+ * FX:BTCUSDT
+ *
+ * which caused:
+ * "This symbol doesn't exist"
+ */
+
+function getTradingViewSymbol(
+  marketType: MarketType,
+  market: string
+) {
+  const cleanSymbol = market
+    .replace("/", "")
+    .toUpperCase()
+    .trim();
+
+  if (marketType === "crypto") {
+    return `BINANCE:${cleanSymbol}`;
+  }
+
+  return `FX:${cleanSymbol}`;
+}
+
+/* =========================================================
    INDICATORS
 ========================================================= */
 
-function calculateRSI(closes: number[], period = 14) {
-  if (closes.length < period + 1) return 50;
+function calculateRSI(
+  closes: number[],
+  period = 14
+) {
+  if (closes.length < period + 1) {
+    return 50;
+  }
 
   let gains = 0;
   let losses = 0;
 
   for (let i = 0; i < period; i++) {
-    const change = closes[i] - closes[i + 1];
+    const change =
+      closes[i] - closes[i + 1];
 
     if (change > 0) {
       gains += change;
@@ -161,26 +266,50 @@ function calculateRSI(closes: number[], period = 14) {
     return avgGain > 0 ? 100 : 50;
   }
 
-  return 100 - 100 / (1 + avgGain / avgLoss);
+  return (
+    100 -
+    100 /
+      (1 + avgGain / avgLoss)
+  );
 }
 
-function calculateEMA(values: number[], period: number) {
-  if (!values.length) return 0;
+function calculateEMA(
+  values: number[],
+  period: number
+) {
+  if (!values.length) {
+    return 0;
+  }
 
-  const p = Math.min(period, values.length);
+  const p = Math.min(
+    period,
+    values.length
+  );
+
   const multiplier = 2 / (p + 1);
 
-  let ema = values[values.length - 1];
+  let ema =
+    values[values.length - 1];
 
-  for (let i = values.length - 2; i >= 0; i--) {
-    ema = values[i] * multiplier + ema * (1 - multiplier);
+  for (
+    let i = values.length - 2;
+    i >= 0;
+    i--
+  ) {
+    ema =
+      values[i] * multiplier +
+      ema * (1 - multiplier);
   }
 
   return ema;
 }
 
-function calculateSignal(closes: number[]): SignalData {
-  const c = closes.filter(Number.isFinite);
+function calculateSignal(
+  closes: number[]
+): SignalData {
+  const c = closes.filter(
+    Number.isFinite
+  );
 
   if (c.length < 15) {
     return {
@@ -195,37 +324,65 @@ function calculateSignal(closes: number[]): SignalData {
 
   const latest = c[0];
 
-  const shortPeriod = Math.min(5, c.length);
-  const longPeriod = Math.min(20, c.length);
+  const shortPeriod = Math.min(
+    5,
+    c.length
+  );
+
+  const longPeriod = Math.min(
+    20,
+    c.length
+  );
 
   const shortAvg =
-    c.slice(0, shortPeriod).reduce((a, b) => a + b, 0) /
+    c
+      .slice(0, shortPeriod)
+      .reduce((a, b) => a + b, 0) /
     shortPeriod;
 
   const longAvg =
-    c.slice(0, longPeriod).reduce((a, b) => a + b, 0) /
+    c
+      .slice(0, longPeriod)
+      .reduce((a, b) => a + b, 0) /
     longPeriod;
 
-  const emaValues = c.slice(0, Math.min(30, c.length));
+  const emaValues = c.slice(
+    0,
+    Math.min(30, c.length)
+  );
 
-  const ema9 = calculateEMA(emaValues, 9);
-  const ema21 = calculateEMA(emaValues, 21);
+  const ema9 = calculateEMA(
+    emaValues,
+    9
+  );
+
+  const ema21 = calculateEMA(
+    emaValues,
+    21
+  );
 
   const trendDiff = longAvg
-    ? ((shortAvg - longAvg) / longAvg) * 100
+    ? ((shortAvg - longAvg) /
+        longAvg) *
+      100
     : 0;
 
   const trend =
-    trendDiff > 0.05 && ema9 > ema21
+    trendDiff > 0.05 &&
+    ema9 > ema21
       ? "Bullish"
-      : trendDiff < -0.05 && ema9 < ema21
+      : trendDiff < -0.05 &&
+          ema9 < ema21
         ? "Bearish"
         : "Sideways";
 
-  const oldPrice = c[Math.min(5, c.length - 1)];
+  const oldPrice =
+    c[Math.min(5, c.length - 1)];
 
   const momentumPercent = oldPrice
-    ? ((latest - oldPrice) / oldPrice) * 100
+    ? ((latest - oldPrice) /
+        oldPrice) *
+      100
     : 0;
 
   const momentum =
@@ -243,26 +400,41 @@ function calculateSignal(closes: number[]): SignalData {
 
   const returns: number[] = [];
 
-  for (let i = 0; i < Math.min(20, c.length - 1); i++) {
+  for (
+    let i = 0;
+    i < Math.min(20, c.length - 1);
+    i++
+  ) {
     if (c[i + 1] !== 0) {
       returns.push(
-        ((c[i] - c[i + 1]) / c[i + 1]) * 100
+        ((c[i] - c[i + 1]) /
+          c[i + 1]) *
+          100
       );
     }
   }
 
   const avg = returns.length
-    ? returns.reduce((a, b) => a + b, 0) / returns.length
-    : 0;
-
-  const variance = returns.length
     ? returns.reduce(
-        (a, b) => a + Math.pow(b - avg, 2),
+        (a, b) => a + b,
         0
       ) / returns.length
     : 0;
 
-  const volatilityValue = Math.sqrt(variance);
+  const variance = returns.length
+    ? returns.reduce(
+        (a, b) =>
+          a +
+          Math.pow(
+            b - avg,
+            2
+          ),
+        0
+      ) / returns.length
+    : 0;
+
+  const volatilityValue =
+    Math.sqrt(variance);
 
   const volatility =
     volatilityValue > 0.8
@@ -273,17 +445,26 @@ function calculateSignal(closes: number[]): SignalData {
 
   let score = 0;
 
-  if (trend === "Bullish") score += 2;
-  if (trend === "Bearish") score -= 2;
+  if (trend === "Bullish") {
+    score += 2;
+  }
+
+  if (trend === "Bearish") {
+    score -= 2;
+  }
 
   if (
-    (momentum === "Strong" || momentum === "Positive") &&
+    (momentum === "Strong" ||
+      momentum === "Positive") &&
     momentumPercent > 0
   ) {
     score += 2;
   }
 
-  if (momentum === "Strong" && momentumPercent < 0) {
+  if (
+    momentum === "Strong" &&
+    momentumPercent < 0
+  ) {
     score -= 2;
   }
 
@@ -291,16 +472,34 @@ function calculateSignal(closes: number[]): SignalData {
     score -= 2;
   }
 
-  if (ema9 > ema21) score += 1;
-  if (ema9 < ema21) score -= 1;
+  if (ema9 > ema21) {
+    score += 1;
+  }
 
-  if (rsi >= 55 && rsi < 70) score += 1;
-  if (rsi <= 45 && rsi > 30) score -= 1;
-  if (rsi >= 70) score -= 1;
-  if (rsi <= 30) score += 1;
+  if (ema9 < ema21) {
+    score -= 1;
+  }
 
-  const signal: Exclude<Signal, null> =
-    score >= 0 ? "BUY" : "SELL";
+  if (rsi >= 55 && rsi < 70) {
+    score += 1;
+  }
+
+  if (rsi <= 45 && rsi > 30) {
+    score -= 1;
+  }
+
+  if (rsi >= 70) {
+    score -= 1;
+  }
+
+  if (rsi <= 30) {
+    score += 1;
+  }
+
+  const signal: Exclude<
+    Signal,
+    null
+  > = score >= 0 ? "BUY" : "SELL";
 
   let confidence =
     Math.abs(score) >= 5
@@ -332,8 +531,16 @@ function calculateSignal(closes: number[]): SignalData {
   };
 }
 
-function runBacktest(closes: number[]): BacktestData {
-  const c = closes.filter(Number.isFinite);
+/* =========================================================
+   BACKTEST
+========================================================= */
+
+function runBacktest(
+  closes: number[]
+): BacktestData {
+  const c = closes.filter(
+    Number.isFinite
+  );
 
   if (c.length < 15) {
     return emptyBacktest;
@@ -348,29 +555,45 @@ function runBacktest(closes: number[]): BacktestData {
   let maxDrawdown = 0;
   let trades = 0;
 
-  for (let i = c.length - 5; i >= 10; i--) {
+  for (
+    let i = c.length - 5;
+    i >= 10;
+    i--
+  ) {
     const window = c.slice(
       Math.max(0, i - 20),
       i + 1
     );
 
-    if (window.length < 10) continue;
+    if (window.length < 10) {
+      continue;
+    }
 
-    const analysis = calculateSignal(window);
+    const analysis =
+      calculateSignal(window);
 
     const entry = c[i];
     const exitIndex = i - 3;
 
-    if (exitIndex < 0 || entry === 0) continue;
+    if (
+      exitIndex < 0 ||
+      entry === 0
+    ) {
+      continue;
+    }
 
     let change =
-      ((c[exitIndex] - entry) / entry) * 100;
+      ((c[exitIndex] - entry) /
+        entry) *
+      100;
 
     if (analysis.signal === "SELL") {
       change *= -1;
     }
 
-    if (!Number.isFinite(change)) continue;
+    if (!Number.isFinite(change)) {
+      continue;
+    }
 
     trades++;
 
@@ -383,23 +606,38 @@ function runBacktest(closes: number[]): BacktestData {
 
     equity += change;
 
-    peak = Math.max(peak, equity);
+    peak = Math.max(
+      peak,
+      equity
+    );
 
     maxDrawdown = Math.max(
       maxDrawdown,
       peak
-        ? ((peak - equity) / peak) * 100
+        ? ((peak - equity) /
+            peak) *
+            100
         : 0
     );
   }
 
   return {
     winRate: trades
-      ? Number(((wins / trades) * 100).toFixed(1))
+      ? Number(
+          (
+            (wins / trades) *
+            100
+          ).toFixed(1)
+        )
       : 0,
 
     profitFactor: grossLoss
-      ? Number((grossProfit / grossLoss).toFixed(2))
+      ? Number(
+          (
+            grossProfit /
+            grossLoss
+          ).toFixed(2)
+        )
       : grossProfit
         ? 99
         : 0,
@@ -422,19 +660,24 @@ function getCandleRemainingSeconds(
 ) {
   const periodSeconds =
     timeframes.find(
-      (item) => item.value === timeframe
+      (item) =>
+        item.value === timeframe
     )?.seconds ?? 300;
 
-  const periodMs = periodSeconds * 1000;
+  const periodMs =
+    periodSeconds * 1000;
 
-  const elapsedMs = nowMs % periodMs;
+  const elapsedMs =
+    nowMs % periodMs;
 
   const remainingMs =
     periodMs - elapsedMs;
 
   return Math.max(
     1,
-    Math.ceil(remainingMs / 1000)
+    Math.ceil(
+      remainingMs / 1000
+    )
   );
 }
 
@@ -454,25 +697,36 @@ function formatCountdown(
     (safeSeconds % 3600) / 60
   );
 
-  const seconds = safeSeconds % 60;
+  const seconds =
+    safeSeconds % 60;
 
   if (hours > 0) {
-    return `${String(hours).padStart(
+    return `${String(
+      hours
+    ).padStart(
       2,
       "0"
-    )}:${String(minutes).padStart(
+    )}:${String(
+      minutes
+    ).padStart(
       2,
       "0"
-    )}:${String(seconds).padStart(
+    )}:${String(
+      seconds
+    ).padStart(
       2,
       "0"
     )}`;
   }
 
-  return `${String(minutes).padStart(
+  return `${String(
+    minutes
+  ).padStart(
     2,
     "0"
-  )}:${String(seconds).padStart(
+  )}:${String(
+    seconds
+  ).padStart(
     2,
     "0"
   )}`;
@@ -530,10 +784,14 @@ function StatBox({
 
 export default function Home() {
   const chartContainerRef =
-    useRef<HTMLDivElement | null>(null);
+    useRef<HTMLDivElement | null>(
+      null
+    );
 
   const cryptoSocketRef =
-    useRef<WebSocket | null>(null);
+    useRef<WebSocket | null>(
+      null
+    );
 
   const [marketType, setMarketType] =
     useState<MarketType>("crypto");
@@ -594,7 +852,9 @@ export default function Home() {
   const [
     signalValidityCountdown,
     setSignalValidityCountdown,
-  ] = useState<number | null>(null);
+  ] = useState<number | null>(
+    null
+  );
 
   const [backtest, setBacktest] =
     useState<BacktestData>(
@@ -663,16 +923,23 @@ export default function Home() {
       [timeframe]
     );
 
+  /*
+   * IMPORTANT:
+   * TradingView symbol is generated
+   * from CURRENT market type + pair.
+   */
   const tradingViewSymbol =
-    marketType === "crypto"
-      ? `BINANCE:${selectedMarket.replace(
-          "/",
-          ""
-        )}`
-      : `FX:${selectedMarket.replace(
-          "/",
-          ""
-        )}`;
+    useMemo(
+      () =>
+        getTradingViewSymbol(
+          marketType,
+          selectedMarket
+        ),
+      [
+        marketType,
+        selectedMarket,
+      ]
+    );
 
   /* =====================================================
      RESET SIGNAL
@@ -690,7 +957,9 @@ export default function Home() {
     setBacktest(emptyBacktest);
     setSignalCountdown(null);
     setIsCounting(false);
-    setSignalValidityCountdown(null);
+    setSignalValidityCountdown(
+      null
+    );
   }
 
   /* =====================================================
@@ -920,14 +1189,6 @@ export default function Home() {
         true
       );
 
-      /*
-       * IMPORTANT:
-       * Signal timer starts ONLY after
-       * signal has successfully generated.
-       *
-       * 5m = 04:59
-       * 1m = 00:59
-       */
       const timeframeSeconds =
         timeframes.find(
           (item) =>
@@ -953,6 +1214,7 @@ export default function Home() {
       setBacktest(
         emptyBacktest
       );
+
       setSignalValidityCountdown(
         null
       );
@@ -973,14 +1235,8 @@ export default function Home() {
       return;
     }
 
-    /*
-     * Clear previous result first.
-     */
     resetSignal();
 
-    /*
-     * Start exactly from 5.
-     */
     setIsCounting(true);
     setSignalCountdown(5);
   }
@@ -1045,10 +1301,6 @@ export default function Home() {
       return;
     }
 
-    /*
-     * When timer reaches 0:
-     * clear old signal and show Generate Signal.
-     */
     if (
       signalValidityCountdown <=
       0
@@ -1136,6 +1388,10 @@ export default function Home() {
     cryptoSocketRef.current =
       ws;
 
+    ws.onopen = () => {
+      setPriceLoading(false);
+    };
+
     ws.onmessage = (
       event
     ) => {
@@ -1162,13 +1418,20 @@ export default function Home() {
       } catch {}
     };
 
-    ws.onerror = () =>
+    ws.onerror = () => {
       setPriceLoading(false);
+    };
 
     return () => {
       ws.close();
-      cryptoSocketRef.current =
-        null;
+
+      if (
+        cryptoSocketRef.current ===
+        ws
+      ) {
+        cryptoSocketRef.current =
+          null;
+      }
     };
   }, [
     marketType,
@@ -1318,7 +1581,31 @@ export default function Home() {
       return;
     }
 
+    /*
+     * IMPORTANT:
+     * Always clear the previous chart.
+     * This prevents old symbols from remaining.
+     */
     container.innerHTML = "";
+
+    /*
+     * Generate symbol from the CURRENT
+     * market type and selected pair.
+     *
+     * Crypto:
+     * BINANCE:BTCUSDT
+     *
+     * Forex:
+     * FX:EURUSD
+     */
+    const symbol =
+      getTradingViewSymbol(
+        marketType,
+        selectedMarket
+      );
+
+    const interval =
+      tvIntervals[timeframe];
 
     const script =
       document.createElement(
@@ -1333,32 +1620,37 @@ export default function Home() {
 
     script.async = true;
 
-    /*
-     * Time/date controls stay enabled.
-     * Nothing here removes TradingView time.
-     */
     script.innerHTML =
       JSON.stringify({
         autosize: true,
-        symbol:
-          tradingViewSymbol,
-        interval:
-          tvIntervals[
-            timeframe
-          ],
-        timezone:
-          "Etc/UTC",
+
+        /*
+         * THIS IS THE IMPORTANT FIX
+         */
+        symbol,
+
+        interval,
+
+        timezone: "Etc/UTC",
+
         theme: "dark",
+
         style: "1",
+
         locale: "en",
-        allow_symbol_change:
-          false,
+
+        allow_symbol_change: false,
+
+        hide_top_toolbar: false,
+
+        hide_legend: false,
+
+        hide_side_toolbar: false,
+
         calendar: false,
-        hide_top_toolbar:
-          false,
-        hide_legend:
-          false,
+
         save_image: false,
+
         support_host:
           "https://www.tradingview.com",
       });
@@ -1371,7 +1663,8 @@ export default function Home() {
       container.innerHTML = "";
     };
   }, [
-    tradingViewSymbol,
+    marketType,
+    selectedMarket,
     timeframe,
   ]);
 
@@ -1444,16 +1737,36 @@ export default function Home() {
 
         <section className="grid gap-4 md:grid-cols-4">
 
+          {/* MARKET */}
+
           <StatBox
             title="Market"
             value={
               <select
                 value={marketType}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const nextMarketType =
+                    e.target.value as MarketType;
+
+                  /*
+                   * IMPORTANT:
+                   * When changing Crypto/Forex,
+                   * also change the pair immediately.
+                   */
+                  const nextMarket =
+                    nextMarketType ===
+                    "crypto"
+                      ? cryptoMarkets[0]
+                      : forexMarkets[0];
+
                   setMarketType(
-                    e.target.value as MarketType
-                  )
-                }
+                    nextMarketType
+                  );
+
+                  setSelectedMarket(
+                    nextMarket
+                  );
+                }}
                 className="
                   mt-2
                   w-full
@@ -1484,6 +1797,8 @@ export default function Home() {
             }
             subtitle={`${markets.length} markets available`}
           />
+
+          {/* PAIR */}
 
           <StatBox
             title="Pair"
@@ -1533,6 +1848,8 @@ export default function Home() {
             }
           />
 
+          {/* TIMEFRAME */}
+
           <StatBox
             title="Timeframe"
             value={
@@ -1577,6 +1894,8 @@ export default function Home() {
             subtitle="Signal analysis timeframe"
           />
 
+          {/* PRICE */}
+
           <StatBox
             title={selectedMarket}
             value={
@@ -1617,9 +1936,7 @@ export default function Home() {
             "
           >
 
-            {/* ---------------------------------------------
-                ANIMATED MARKET HEADER BOX
-            --------------------------------------------- */}
+            {/* MARKET HEADER */}
 
             <div
               className="
@@ -1637,8 +1954,6 @@ export default function Home() {
                 shadow-blue-950/30
               "
             >
-
-              {/* animated light */}
               <div
                 className="
                   pointer-events-none
@@ -1727,6 +2042,7 @@ export default function Home() {
                   >
                     <span className="relative flex h-2.5 w-2.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+
                       <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
                     </span>
 
@@ -1737,9 +2053,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ---------------------------------------------
-                ACTUAL TRADINGVIEW CHART
-            --------------------------------------------- */}
+            {/* =================================================
+                TRADINGVIEW CHART
+            ================================================= */}
 
             <div className="mt-4 overflow-hidden rounded-xl bg-slate-950">
 
@@ -1748,10 +2064,7 @@ export default function Home() {
                 className="h-[500px] w-full"
               />
 
-              {/* -------------------------------------------
-                  BELOW CHART:
-                  BTC/USDT • 5 Minutes
-              ------------------------------------------- */}
+              {/* BELOW CHART */}
 
               <div
                 className="
@@ -1794,7 +2107,8 @@ export default function Home() {
                 </span>
 
                 <span>
-                  {marketType === "crypto"
+                  {marketType ===
+                  "crypto"
                     ? "Crypto • Binance"
                     : "Forex • TradingView FX"}
                 </span>
@@ -1827,7 +2141,7 @@ export default function Home() {
 
               <div className="flex shrink-0 items-center gap-2">
 
-                {/* 5 SECOND GENERATION COUNTDOWN */}
+                {/* GENERATION COUNTDOWN */}
 
                 {isCounting ? (
                   <div
@@ -1849,8 +2163,12 @@ export default function Home() {
                     <span className="font-mono text-sm font-black tabular-nums text-blue-300">
                       00:
                       {String(
-                        signalCountdown ?? 0
-                      ).padStart(2, "0")}
+                        signalCountdown ??
+                          0
+                      ).padStart(
+                        2,
+                        "0"
+                      )}
                     </span>
                   </div>
                 ) : signalLoading ? (
@@ -1875,10 +2193,6 @@ export default function Home() {
                 ) : signalGenerated &&
                   signalValidityCountdown !==
                     null ? (
-                  /* -----------------------------------------
-                     SIGNAL VALIDITY TIMER
-                  ----------------------------------------- */
-
                   <div
                     className="
                       rounded-xl
@@ -1910,9 +2224,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ---------------------------------------------
-                SIGNAL MAIN BOX
-            --------------------------------------------- */}
+            {/* SIGNAL MAIN BOX */}
 
             <div className="mt-5 rounded-2xl bg-slate-950 p-5">
 
@@ -1970,8 +2282,6 @@ export default function Home() {
                       "
                     />
                   )}
-
-                  {/* 5 4 3 2 1 */}
 
                   {isCounting ? (
                     <>
@@ -2033,9 +2343,7 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* -------------------------------------------
-                  ANALYSIS DATA
-              ------------------------------------------- */}
+              {/* ANALYSIS DATA */}
 
               {signalGenerated &&
                 signal &&
@@ -2096,9 +2404,7 @@ export default function Home() {
                 </p>
               )}
 
-              {/* -------------------------------------------
-                  GENERATE BUTTON
-              ------------------------------------------- */}
+              {/* GENERATE BUTTON */}
 
               <button
                 type="button"
@@ -2163,8 +2469,6 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-
-                {/* WIN RATE - RED */}
 
                 <AnimatedCard className="rounded-xl bg-slate-950 p-3">
                   <p className="text-xs text-slate-500">
