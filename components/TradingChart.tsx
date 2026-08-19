@@ -6,145 +6,121 @@ type TradingChartProps = {
   market: string;
 };
 
-export default function TradingChart({
-  market,
-}: TradingChartProps) {
+export default function TradingChart({ market }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
     const container = containerRef.current;
 
-    // Remove previous chart
+    if (!container) return;
+
+    // Clear old chart
     container.innerHTML = "";
 
-    /*
-     * Convert dashboard symbols to REAL TradingView symbols.
-     *
-     * TradingView format:
-     * EXCHANGE:SYMBOL
-     */
-
-    const forexMap: Record<string, string> = {
-      "EUR/USD": "OANDA:EURUSD",
-      "GBP/USD": "OANDA:GBPUSD",
-      "USD/JPY": "OANDA:USDJPY",
-      "USD/CHF": "OANDA:USDCHF",
-      "AUD/USD": "OANDA:AUDUSD",
-      "USD/CAD": "OANDA:USDCAD",
-      "NZD/USD": "OANDA:NZDUSD",
-
-      "EUR/GBP": "OANDA:EURGBP",
-      "EUR/JPY": "OANDA:EURJPY",
-      "GBP/JPY": "OANDA:GBPJPY",
-      "EUR/CHF": "OANDA:EURCHF",
-      "AUD/JPY": "OANDA:AUDJPY",
-      "GBP/CHF": "OANDA:GBPCHF",
-      "CAD/JPY": "OANDA:CADJPY",
-      "CHF/JPY": "OANDA:CHFJPY",
-      "NZD/JPY": "OANDA:NZDJPY",
-
-      "EUR/AUD": "OANDA:EURAUD",
-      "EUR/CAD": "OANDA:EURCAD",
-      "GBP/CAD": "OANDA:GBPCAD",
-      "AUD/CAD": "OANDA:AUDCAD",
-      "AUD/NZD": "OANDA:AUDNZD",
-      "GBP/AUD": "OANDA:GBPAUD",
-      "GBP/NZD": "OANDA:GBPNZD",
-      "NZD/CAD": "OANDA:NZDCAD",
-      "CAD/CHF": "OANDA:CADCHF",
-      "AUD/CHF": "OANDA:AUDCHF",
-      "NZD/CHF": "OANDA:NZDCHF",
-      "EUR/NZD": "OANDA:EURNZD",
-
-      "GBP/SGD": "OANDA:GBPSGD",
-      "USD/SGD": "OANDA:USDSGD",
-    };
-
-    /*
-     * Crypto mapping.
-     *
-     * BTC/USDT
-     * ETH/USDT
-     * etc.
-     *
-     * TradingView Binance symbols use:
-     * BINANCE:BTCUSDT
-     * BINANCE:ETHUSDT
-     */
-
+    // Convert application symbol to a valid TradingView symbol
     const getTradingViewSymbol = (symbol: string): string => {
       const cleanSymbol = symbol
         .trim()
-        .toUpperCase();
+        .toUpperCase()
+        .replace(/\s+/g, "");
 
-      // Forex
-      if (forexMap[cleanSymbol]) {
-        return forexMap[cleanSymbol];
-      }
-
-      // Crypto
-      if (cleanSymbol.includes("/USDT")) {
+      // ==========================================
+      // CRYPTO
+      // Example:
+      // BTC/USDT -> BINANCE:BTCUSDT
+      // ETH/USDT -> BINANCE:ETHUSDT
+      // SOL/USDT -> BINANCE:SOLUSDT
+      // ==========================================
+      if (cleanSymbol.endsWith("/USDT")) {
         const cryptoSymbol = cleanSymbol.replace("/", "");
 
         return `BINANCE:${cryptoSymbol}`;
       }
 
-      // Other common crypto pairs
-      if (cleanSymbol.includes("/USD")) {
-        const cryptoSymbol = cleanSymbol.replace("/", "");
+      // ==========================================
+      // FOREX
+      // Example:
+      // EUR/USD -> FX:EURUSD
+      // GBP/USD -> FX:GBPUSD
+      // USD/JPY -> FX:USDJPY
+      // ==========================================
+      const forexMap: Record<string, string> = {
+        "EUR/USD": "FX:EURUSD",
+        "GBP/USD": "FX:GBPUSD",
+        "USD/JPY": "FX:USDJPY",
+        "USD/CHF": "FX:USDCHF",
+        "AUD/USD": "FX:AUDUSD",
+        "USD/CAD": "FX:USDCAD",
+        "NZD/USD": "FX:NZDUSD",
 
-        return `COINBASE:${cryptoSymbol}`;
+        "EUR/GBP": "FX:EURGBP",
+        "EUR/JPY": "FX:EURJPY",
+        "GBP/JPY": "FX:GBPJPY",
+        "EUR/CHF": "FX:EURCHF",
+
+        "AUD/JPY": "FX:AUDJPY",
+        "GBP/CHF": "FX:GBPCHF",
+        "CAD/JPY": "FX:CADJPY",
+        "CHF/JPY": "FX:CHFJPY",
+        "NZD/JPY": "FX:NZDJPY",
+
+        "EUR/AUD": "FX:EURAUD",
+        "EUR/CAD": "FX:EURCAD",
+        "EUR/NZD": "FX:EURNZD",
+
+        "GBP/CAD": "FX:GBPCAD",
+        "GBP/AUD": "FX:GBPAUD",
+        "GBP/NZD": "FX:GBPNZD",
+        "GBP/SGD": "FX:GBPSGD",
+
+        "AUD/CAD": "FX:AUDCAD",
+        "AUD/NZD": "FX:AUDNZD",
+        "AUD/CHF": "FX:AUDCHF",
+
+        "NZD/CAD": "FX:NZDCAD",
+        "NZD/CHF": "FX:NZDCHF",
+
+        "CAD/CHF": "FX:CADCHF",
+
+        "USD/SGD": "FX:USDSGD",
+      };
+
+      if (forexMap[symbol]) {
+        return forexMap[symbol];
       }
 
-      // Fallback
-      return "OANDA:EURUSD";
+      // ==========================================
+      // FALLBACK
+      // ==========================================
+      return "FX:EURUSD";
     };
 
-    const tradingViewSymbol =
-      getTradingViewSymbol(market);
+    const tradingViewSymbol = getTradingViewSymbol(market);
 
-    /*
-     * IMPORTANT:
-     *
-     * We use tvwidgetsymbol instead of symbol.
-     *
-     * TradingView officially supports tvwidgetsymbol
-     * for Advanced Chart widgets.
-     */
+    console.log("TradingView symbol:", tradingViewSymbol);
 
+    // Create TradingView iframe
     const iframe = document.createElement("iframe");
 
     const params = new URLSearchParams({
       frameElementId: "tradingview_chart",
-
-      // IMPORTANT FIX
-      tvwidgetsymbol: tradingViewSymbol,
-
+      symbol: tradingViewSymbol,
       interval: "5",
       hidesidetoolbar: "0",
       symboledit: "1",
       saveimage: "1",
-
       toolbarbg: "#020617",
-
       theme: "dark",
       style: "1",
       timezone: "Etc/UTC",
-
       withdateranges: "1",
       hideideas: "1",
       hidelegend: "0",
-      hidevolume: "0",
-
       allow_symbol_change: "1",
-
       locale: "en",
     });
 
-    iframe.src =
-      `https://www.tradingview.com/widgetembed/?${params.toString()}`;
+    iframe.src = `https://www.tradingview.com/widgetembed/?${params.toString()}`;
 
     iframe.id = "tradingview_chart";
 
@@ -153,26 +129,14 @@ export default function TradingChart({
     iframe.style.border = "0";
     iframe.style.display = "block";
 
+    iframe.setAttribute("allowtransparency", "true");
+    iframe.setAttribute("frameborder", "0");
     iframe.setAttribute(
-      "allowtransparency",
-      "true"
-    );
-
-    iframe.setAttribute(
-      "frameborder",
-      "0"
-    );
-
-    iframe.setAttribute(
-      "scrolling",
-      "no"
+      "allow",
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
     );
 
     container.appendChild(iframe);
-
-    /*
-     * Cleanup when market changes.
-     */
 
     return () => {
       container.innerHTML = "";
